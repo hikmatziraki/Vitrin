@@ -1,4 +1,6 @@
 {
+  "outputDirectory": ".",
+  "buildCommand": "npm run build",
   "cleanUrls": true,
   "trailingSlash": false,
   "headers": [

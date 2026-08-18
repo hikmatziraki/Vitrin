@@ -1,3 +1,64 @@
-import {NextResponse} from 'next/server';import {requireUser} from '@/lib/server/guard';import {serverSupabase} from '@/lib/server/supabase';import {missionStart,eventChoice,upgrade,craft,levelup,marketList,marketBuy,id} from '@/lib/validation';
-async function dispatch(req:Request,parts:string[]){const method=req.method;const s=await serverSupabase();if(method==='GET'){if(parts.join('/')==='market/listings'){const {data,error}=await s.from('market_listings').select('id,item_id,price,seller_id,created_at').eq('status','active').order('created_at',{ascending:false});return NextResponse.json(data??[],{status:error?400:200})}if(parts.join('/')==='seasons/current'){const {data}=await s.from('seasons').select('*').order('id',{ascending:false}).limit(1).maybeSingle();return NextResponse.json(data??null)}if(parts.join('/')==='leaderboard'){const {data}=await s.from('leaderboard_snapshots').select('*').order('rank').limit(100);return NextResponse.json(data??[])}if(parts.join('/')==='admin/balance'){const {user}=await requireUser();if(user.email!==process.env.VOIDRUN_ADMIN_EMAIL)throw new Error('FORBIDDEN');const {data}=await s.from('balance_config').select('*');return NextResponse.json(data)}if(parts.join('/')==='admin/economy'){const {user}=await requireUser();if(user.email!==process.env.VOIDRUN_ADMIN_EMAIL)throw new Error('FORBIDDEN');const {data,error}=await s.rpc('economy_dashboard');if(error)throw error;return NextResponse.json(data)}if(parts.join('/')==='admin/audit-logs'){const {user}=await requireUser();if(user.email!==process.env.VOIDRUN_ADMIN_EMAIL)throw new Error('FORBIDDEN');const {data}=await s.from('audit_logs').select('*').order('created_at',{ascending:false}).limit(200);return NextResponse.json(data??[])}return NextResponse.json({error:'NOT_FOUND'},{status:404})}if(parts.join('/')==='auth/guest'){const {data,error}=await s.auth.signInAnonymously();if(error)throw error;return NextResponse.json({userId:data.user?.id})}const {s:authDb,user}=await requireUser();const p=parts.join('/');const b=await req.json().catch(()=>({}));let data,error;if(p==='missions/start'){const x=missionStart.parse(b);({data,error}=await authDb.rpc('start_mission',{p_user_id:user.id,p_zone_id:x.zoneId,p_explorer_id:x.explorerId}))}else if(p==='missions/event-choice'){const x=eventChoice.parse(b);({data,error}=await authDb.rpc('record_mission_choice',{p_user_id:user.id,p_mission_id:x.missionId,p_event_index:x.eventIndex,p_choice:x.choice}))}else if(p==='missions/resolve'){({data,error}=await authDb.rpc('resolve_due_missions',{p_user_id:user.id}))}else if(p==='base/upgrade'){const x=upgrade.parse(b);({data,error}=await authDb.rpc('upgrade_module',{p_user_id:user.id,p_type:x.type}))}else if(p==='craft/start'){const x=craft.parse(b);({data,error}=await authDb.rpc('start_craft',{p_user_id:user.id,p_recipe_id:x.recipeId}))}else if(p==='craft/collect'){({data,error}=await authDb.rpc('collect_craft',{p_user_id:user.id}))}else if(p==='explorers/levelup'){const x=levelup.parse(b);({data,error}=await authDb.rpc('level_up_explorer',{p_user_id:user.id,p_explorer_id:x.explorerId}))}else if(p==='explorers/ascend'){const x=id.parse(b.explorerId);({data,error}=await authDb.rpc('ascend_explorer',{p_user_id:user.id,p_explorer_id:x}))}else if(p==='market/list'){const x=marketList.parse(b);({data,error}=await authDb.rpc('list_market_item',{p_user_id:user.id,p_item_id:x.itemId,p_price:x.price}))}else if(p==='market/buy'){const x=marketBuy.parse(b);({data,error}=await authDb.rpc('buy_market_item',{p_buyer_id:user.id,p_listing_id:x.listingId}))}else if(p==='guild/create'){if(typeof b.name!=='string'||b.name.length<3||b.name.length>32)throw new Error('INVALID_NAME');({data,error}=await authDb.rpc('create_guild',{p_user_id:user.id,p_name:b.name}))}else if(p==='raids/join'){({data,error}=await authDb.rpc('join_raid',{p_user_id:user.id,p_raid_id:b.raidId}))}else if(p==='prestige'){({data,error}=await authDb.rpc('prestige',{p_user_id:user.id}))}else if(p==='wallet/connect'||p==='wallet/withdraw')return NextResponse.json({enabled:false,message:'Phase 4 wallet functionality is disabled.'},{status:403});else if(p==='admin/balance'&&method==='PUT'){if(user.email!==process.env.VOIDRUN_ADMIN_EMAIL)throw new Error('FORBIDDEN');({data,error}=await authDb.from('balance_config').upsert({key:b.key,value:b.value,updated_at:new Date().toISOString()}).select().single())}else throw new Error('NOT_FOUND');if(error)throw error;return NextResponse.json(data??{ok:true})}
-export async function GET(req:Request,{params}:{params:Promise<{path:string[]}>}){try{return await dispatch(req,(await params).path)}catch(e){return NextResponse.json({error:String(e)},{status:400})}}export async function POST(req:Request,{params}:{params:Promise<{path:string[]}>}){try{return await dispatch(req,(await params).path)}catch(e){return NextResponse.json({error:String(e)},{status:400})}}export async function PUT(req:Request,{params}:{params:Promise<{path:string[]}>}){try{return await dispatch(req,(await params).path)}catch(e){return NextResponse.json({error:String(e)},{status:400})}}
+import {NextResponse} from 'next/server';
+import {requireUser} from '@/lib/server/guard';
+import {serverSupabase} from '@/lib/server/supabase';
+import {missionStart,eventChoice,upgrade,craft,levelup,marketList,marketBuy,id} from '@/lib/validation';
+import {enforceRateLimit} from '@/lib/server/rate-limit';
+
+async function dispatch(req:Request,parts:string[]){
+ const method=req.method; const path=parts.join('/');
+ if(path==='auth/guest'&&method==='POST'){
+   const s=await serverSupabase(); const {data,error}=await s.auth.signInAnonymously();
+   if(error) throw error; return NextResponse.json({userId:data.user?.id});
+ }
+ const {s,user}=await requireUser();
+ const rate=await enforceRateLimit(`user:${user.id}:${path}`); if(!rate.success) return NextResponse.json({error:'RATE_LIMITED'},{status:429});
+ if(method==='GET'){
+   if(path==='state'){
+     const [profile,currency,modules,energy,explorers,missions,crafts]=await Promise.all([
+       s.from('profiles').select('*').eq('user_id',user.id).maybeSingle(),
+       s.from('currencies').select('*').eq('user_id',user.id).maybeSingle(),
+       s.from('modules').select('*').eq('user_id',user.id).order('type'),
+       s.from('energy').select('*').eq('user_id',user.id).maybeSingle(),
+       s.from('explorers').select('*').eq('user_id',user.id).order('id'),
+       s.from('missions').select('*').eq('user_id',user.id).order('started_at',{ascending:false}).limit(10),
+       s.from('craft_queue').select('*,recipes(*)').eq('user_id',user.id).order('started_at',{ascending:false})
+     ]);
+     return NextResponse.json({profile:profile.data,currency:currency.data,modules:modules.data??[],energy:energy.data,explorers:explorers.data??[],missions:missions.data??[],crafts:crafts.data??[]});
+   }
+   if(path==='zones'){const {data,error}=await s.from('zones').select('*').order('id');if(error)throw error;return NextResponse.json(data??[]);}
+   if(path==='recipes'){const {data,error}=await s.from('recipes').select('*').order('id');if(error)throw error;return NextResponse.json(data??[]);}
+   if(path==='market/listings'){const {data,error}=await s.from('market_listings').select('id,item_id,price,seller_id,created_at,items(type,subtype,rarity,durability)').eq('status','active').order('created_at',{ascending:false});if(error)throw error;return NextResponse.json(data??[]);}
+   if(path==='seasons/current'){const {data}=await s.from('seasons').select('*').order('id',{ascending:false}).limit(1).maybeSingle();return NextResponse.json(data??null);}
+   if(path==='leaderboard'){const {data}=await s.from('leaderboard_snapshots').select('*').order('rank').limit(100);return NextResponse.json(data??[]);}
+   if(path==='explorers/catalog'){const {data}=await s.from('explorer_catalog').select('*').order('id');return NextResponse.json(data??[]);}
+   if(path==='decisions'){const {data}=await s.from('decision_event_bank').select('id,zone_id,clue,choices,explanation').order('id');return NextResponse.json(data??[]);}
+   if(path==='admin/balance'||path==='admin/economy'||path==='admin/audit-logs'){
+     if(user.email!==process.env.VOIDRUN_ADMIN_EMAIL) throw new Error('FORBIDDEN');
+     if(path==='admin/balance'){const {data}=await s.from('balance_config').select('*').order('key');return NextResponse.json(data??[]);}
+     if(path==='admin/economy'){const {data,error}=await s.rpc('economy_dashboard');if(error)throw error;return NextResponse.json(data);}
+     const {data}=await s.from('audit_logs').select('*').order('created_at',{ascending:false}).limit(200);return NextResponse.json(data??[]);
+   }
+   return NextResponse.json({error:'NOT_FOUND'},{status:404});
+ }
+ const body=await req.json().catch(()=>({})); let data,error;
+ if(path==='missions/start'){const x=missionStart.parse(body);({data,error}=await s.rpc('start_mission',{p_user_id:user.id,p_zone_id:x.zoneId,p_explorer_id:x.explorerId}));}
+ else if(path==='missions/event-choice'){const x=eventChoice.parse(body);({data,error}=await s.rpc('record_mission_choice',{p_user_id:user.id,p_mission_id:x.missionId,p_event_index:x.eventIndex,p_choice:x.choice}));}
+ else if(path==='missions/resolve'){({data,error}=await s.rpc('resolve_due_missions',{p_user_id:user.id}));}
+ else if(path==='base/upgrade'){const x=upgrade.parse(body);({data,error}=await s.rpc('upgrade_module',{p_user_id:user.id,p_type:x.type}));}
+ else if(path==='craft/start'){const x=craft.parse(body);({data,error}=await s.rpc('start_craft',{p_user_id:user.id,p_recipe_id:x.recipeId}));}
+ else if(path==='craft/collect'){({data,error}=await s.rpc('collect_craft',{p_user_id:user.id}));}
+ else if(path==='explorers/levelup'){const x=levelup.parse(body);({data,error}=await s.rpc('level_up_explorer',{p_user_id:user.id,p_explorer_id:x.explorerId}));}
+ else if(path==='explorers/ascend'){const x=id.parse(body.explorerId);({data,error}=await s.rpc('ascend_explorer',{p_user_id:user.id,p_explorer_id:x}));}
+ else if(path==='market/list'){const x=marketList.parse(body);({data,error}=await s.rpc('list_market_item',{p_user_id:user.id,p_item_id:x.itemId,p_price:x.price}));}
+ else if(path==='market/buy'){const x=marketBuy.parse(body);({data,error}=await s.rpc('buy_market_item',{p_buyer_id:user.id,p_listing_id:x.listingId}));}
+ else if(path==='guild/create'){if(typeof body.name!=='string'||body.name.length<3||body.name.length>32)throw new Error('INVALID_NAME');({data,error}=await s.rpc('create_guild',{p_user_id:user.id,p_name:body.name}));}
+ else if(path==='raids/join'){({data,error}=await s.rpc('join_raid',{p_user_id:user.id,p_raid_id:body.raidId}));}
+ else if(path==='prestige'){({data,error}=await s.rpc('prestige',{p_user_id:user.id}));}
+ else if(path==='wallet/connect'||path==='wallet/withdraw') return NextResponse.json({enabled:false,message:'Phase 4 wallet functionality is disabled.'},{status:403});
+ else if(path==='admin/balance'&&method==='PUT'){if(user.email!==process.env.VOIDRUN_ADMIN_EMAIL)throw new Error('FORBIDDEN');({data,error}=await s.from('balance_config').upsert({key:body.key,value:body.value,updated_at:new Date().toISOString()}).select().single());}
+ else throw new Error('NOT_FOUND');
+ if(error)throw error; return NextResponse.json(data??{ok:true});
+}
+export async function GET(req:Request,{params}:{params:Promise<{path:string[]}>}){try{return await dispatch(req,(await params).path)}catch(e){return NextResponse.json({error:e instanceof Error?e.message:String(e)},{status:400})}}
+export async function POST(req:Request,{params}:{params:Promise<{path:string[]}>}){try{return await dispatch(req,(await params).path)}catch(e){return NextResponse.json({error:e instanceof Error?e.message:String(e)},{status:400})}}
+export async function PUT(req:Request,{params}:{params:Promise<{path:string[]}>}){try{return await dispatch(req,(await params).path)}catch(e){return NextResponse.json({error:e instanceof Error?e.message:String(e)},{status:400})}}

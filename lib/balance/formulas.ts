@@ -1,0 +1,12 @@
+export type ModuleType='energy'|'workshop'|'storage'|'lab';
+export const clamp=(n:number,min:number,max:number)=>Math.min(max,Math.max(min,n));
+export const moduleCost=(type:ModuleType,level:number)=>Math.round(({energy:100,workshop:120,storage:110,lab:140}[type])*1.35**(Math.max(1,level)-1));
+export const moduleTimeMinutes=(level:number)=>Math.ceil(2*1.25**(Math.max(1,level)-1));
+export const energyCap=(level:number)=>100+20*(Math.max(1,level)-1);
+export const energyRegenPerHour=(level:number)=>5+(Math.max(1,level)-1);
+export const workshopCraftTime=(baseMinutes:number,workshopLevel:number)=>Math.ceil(baseMinutes/(1+.08*Math.max(0,workshopLevel)));
+export const explorerLevelCost=(level:number)=>Math.round(50*1.3**(Math.max(1,level)-1));
+export const successProbability=(statMatch:number,gearScore:number,hazardEffective:number,fatigue:number)=>clamp(.75+.15*statMatch+.10*gearScore-.9*hazardEffective-fatigue,.15,.95);
+export const marketTax=(price:number)=>({burn:price*.02,treasury:price*.02,rewards:price*.01,total:price*.05});
+export const emissionCap=(sinkVolume7d:number,k:number,max:number)=>Math.min(max,k*sinkVolume7d);
+export const prestigeYieldMultiplier=(marks:number)=>1+.05*Math.min(10,Math.max(0,marks));

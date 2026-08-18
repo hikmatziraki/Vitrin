@@ -1,17 +1,13 @@
-name: CI
-on:
-  push:
-  pull_request:
+name: VOIDRUN CI
+on: [push,pull_request]
 jobs:
-  validate:
+  verify:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-      - run: npm run check
+        with: {node-version: 22,cache: npm}
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
       - run: npm run build
-        env:
-          VITRIN_SUPABASE_URL: https://example.supabase.co
-          VITRIN_SUPABASE_KEY: sb_publishable_placeholder

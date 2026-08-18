@@ -1,0 +1,1 @@
+import type {MetadataRoute} from 'next';export default function sitemap():MetadataRoute.Sitemap{return['/','/base','/explore','/workshop','/explorers','/inventory','/market','/guilds','/seasons','/leaderboard','/prestige','/profile'].map(url=>({url:`https://voidrun.vercel.app${url}`,lastModified:new Date()}))}

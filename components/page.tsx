@@ -1,0 +1,4 @@
+import Link from 'next/link';
+export function Shell({title,eyebrow,children}:{title:string;eyebrow?:string;children:React.ReactNode}){return <section className="mx-auto max-w-7xl p-5 sm:p-8"><div className="mb-7"><div className="text-xs uppercase tracking-[.25em] text-cyan-300">{eyebrow||'VOIDRUN // STATION'}</div><h1 className="mt-2 text-3xl font-black sm:text-4xl">{title}</h1></div>{children}</section>}
+export function Card({children,className=''}:{children:React.ReactNode;className?:string}){return <div className={`panel p-5 ${className}`}>{children}</div>}
+export function Stat({label,value,sub}:{label:string;value:string|number;sub?:string}){return <Card><div className="text-xs uppercase tracking-wider text-slate-500">{label}</div><div className="mt-2 text-2xl font-bold">{value}</div>{sub&&<div className="mt-1 text-xs text-slate-500">{sub}</div>}</Card>}

@@ -1,29 +1,22 @@
-# Vitrin
+# VOIDRUN
 
-Marketplace فارسی/دری برای آگهی‌های دیجیتال، آماده‌ی deploy روی Vercel و اتصال به Supabase.
+Server-authoritative, mobile-first sci-fi exploration/management game. Free entry, no staking, no profit promises, wallet features disabled by default.
 
-## Deploy
+## Stack
+Next.js App Router + TypeScript + Tailwind v4 + Supabase Postgres/Auth + optional Upstash Redis + Vercel.
 
-1. Repository را روی GitHub قرار بده.
-2. در Vercel پروژه را Import کن.
-3. Environment Variables را اضافه کن:
-   - `VITRIN_SUPABASE_URL`
-   - `VITRIN_SUPABASE_KEY` (publishable/anon key، نه service role)
-4. Build Command: `npm run build`
-5. Output Directory: `.`
+## Local setup
+1. Copy `.env.example` to `.env.local`.
+2. Add Supabase URL and publishable key. Never expose a service-role key to the browser.
+3. Run `db/migrations/0001_voidrun_core.sql` in Supabase SQL Editor or via Supabase CLI.
+4. `npm install && npm run dev`.
+5. `npm run typecheck && npm test && npm run build`.
 
-## Supabase
+## Admin
+Set `VOIDRUN_ADMIN_EMAIL` to the development admin email. Admin routes compare the authenticated email server-side.
 
-Migration موجود در `supabase/migrations/0001_vitrin_core.sql` schema، RLS، triggerها، view و RPCهای لازم را ایجاد می‌کند.
+## Vercel
+Import this repository, set environment variables, and use `npm run build`. Add Upstash variables when provisioned. Wallet routes intentionally return disabled until Phase 4.
 
-برای اولین ادمین، بعد از ثبت‌نام حساب موردنظر، در SQL Editor اجرا کن:
-
-```sql
-update public.profiles set role = 'admin' where email = 'YOUR_ADMIN_EMAIL';
-```
-
-سپس صفحه را refresh کن.
-
-## امنیت
-
-هرگز `service_role`/secret key را در Vercel Environment Variables با نامی که به browser expose شود قرار نده. کلید client باید فقط publishable/anon باشد و authorization در RLS/Database enforce شود.
+## Economy safeguards
+All mutations are server-side. Market buys use PostgreSQL row locks. Balance values live in `balance_config`. Ledger entries are append-only. Withdrawals are disabled until Phase 4.
